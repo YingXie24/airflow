@@ -4,18 +4,6 @@ from airflow.sdk.bases.sensor import PokeReturnValue
 from airflow.providers.standard.operators.python import PythonOperator
 
 
-def _extract_user(ti):
-    # fake_user = ti.xcom_pull(task_ids="check_API_exists")
-    import requests
-    response = requests.get("https://raw.githubusercontent.com/marclamberti/datasets/refs/heads/main/fakeuser.json")
-    fake_user = response.json()
-    return {
-        "id": fake_user["id"],
-        "firstname": fake_user["personalInfo"]["firstName"],
-        "lastname": fake_user["personalInfo"]["lastName"],
-        "email": fake_user["personalInfo"]["email"],
-    } 
-
 @dag
 def user_processing(): 
     
@@ -51,14 +39,45 @@ def user_processing():
 
         return PokeReturnValue(is_done=condition, xcom_value=fake_user)
     
-    check_API_exists()
+    fake_user = check_API_exists()
 
     # Task 3: Parsing the JSON data pulled from the API sensor
+    @task
+    def extract_user(fake_user):
+        return {
+            "id": fake_user["id"],
+            "firstname": fake_user["personalInfo"]["firstName"],
+            "lastname": fake_user["personalInfo"]["lastName"],
+            "email": fake_user["personalInfo"]["email"],
+    } 
 
-    extract_user = PythonOperator(
-        task_id = "extract_user",
-        python_callable = _extract_user,
-    )
+    user_info = extract_user(fake_user)
+
+    # Task 4: Save user info into a csv file
+    @task
+    def process_user(user_info):
+        import csv
+
+        file_path = "/tmp/user_info.csv"
+
+        user_info = {
+            "id": "123",
+            "firstname": "Ying",
+            "lastname": "Xie",
+            "email": "yingxie@gmail.com",
+        } 
+
+
+        with open(file_path, mode='w', newline='') as file:
+            writer = csv.DictWriter(file, fieldnames=user_info.keys())
+
+            writer.writeheader()
+            writer.writerow(user_info)
+
+
+    process_user(user_info)
+
+
 
 
 user_processing()
